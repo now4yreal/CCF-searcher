@@ -8,7 +8,7 @@ import html
 import urllib
 import json
 import os
-import threading
+from multiprocessing import Process, Pipe
 
 ccf_json_path = 'CCF_rank_2019.json'
 ccf_rank = []
@@ -18,10 +18,8 @@ ccf_full_name_hash = []
 ccf_full_name = []
 ccf_publisher = []
 ccf_url = []
-paper_info = []
-thread_lock = threading.Lock()
 ccf_num = 0
-THREAD_NUM = 40
+PROCESS_NUM = 20
 
 def out_print(info:str):
     print('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S'), info))
@@ -348,51 +346,39 @@ def load_ccf():
                 ccf_publisher += [item['publisher']]
                 ccf_url += [item['url']]
 
-class crawlerTread(threading.Thread):
-    def __init__(self, threadID, search_list):
-        threading.Thread.__init__(self,name=str(threadID))
-        self.threadID = threadID
-        self.search_list = search_list
-        self.name = str(threadID)
 
-    def run(self):
-        #print ("Start process： " + str(self.threadID))
-        thread_handler(self.search_list, self.threadID)
-        #print ("End process： ：" + str(self.threadID))
-
-def thread_handler(search_list, threadID):
-    global paper_info
-    global thread_lock
+def process_handler(search_list, cpu_id, conn):
     global ccf_num
-    global THREAD_NUM
+    global PROCESS_NUM
+    paper_info = []
 
-    per_cpu_task_num = int(ccf_num / THREAD_NUM) + 1
+    per_cpu_task_num = int(ccf_num / PROCESS_NUM) + 1
+    
     for i in range(per_cpu_task_num):
         try:
-            process_id = threadID + i * THREAD_NUM
+            process_id = cpu_id + i * PROCESS_NUM
             instance_url = search_list[process_id]
             out_print('(%03d/%03d) Deal with: %s' % (process_id + 1, ccf_num, instance_url))
 
             if('dblp.uni-trier.de/db/conf' in instance_url):
-                thread_lock.acquire()
                 paper_info += conf_handler(instance_url, proxy)
-                thread_lock.release()
             elif('dblp.uni-trier.de/db/journals' in instance_url):
-                thread_lock.acquire()
                 paper_info += journals_handler(instance_url, proxy)
-                thread_lock.release()
             else:
                 out_print('Only support for dblp.uni-trier.de')
         except Exception as e:
             print("ERROR: ", e)
             continue
+    
+    conn.send(str(paper_info))
 
 
 def main_handler(search_list, start=1, proxy={}):
-    global paper_info
     global ccf_num
-    global THREAD_NUM
-
+    global PROCESS_NUM
+    process_pool = []
+    paper_info = []
+    conn1, conn2 = Pipe()
     '''
     Return matrix 
     [[year, title, doi_url, authors, ccf_rank, abbreviation, ccf_name, full_name, publisher], 
@@ -401,16 +387,17 @@ def main_handler(search_list, start=1, proxy={}):
     load_ccf()
 
     ccf_num = len(search_list)
-    thread_pool = []
+    for i in range(PROCESS_NUM):
+        per_process_num = int(ccf_num/PROCESS_NUM) + 1
+        process = Process(target=process_handler, args=(search_list, i, conn2))
+        process_pool.append(process)
+        process.start()
 
-    for i in range(THREAD_NUM):
-        per_thread_num = int(ccf_num/THREAD_NUM) + 1
-        thread = crawlerTread(i, search_list)
-        thread_pool.append(thread)
-        thread.start()
-    
-    for t in thread_pool:
-        t.join()
+    for i in range(PROCESS_NUM):
+        per_content = conn1.recv()   
+        paper_info += list(per_content)
+    for p in process_pool:
+        p.join()
     return paper_info
 
 def get_unique_ccf_url(path=ccf_json_path)->list:
