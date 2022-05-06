@@ -19,7 +19,7 @@ ccf_full_name = []
 ccf_publisher = []
 ccf_url = []
 ccf_num = 0
-PROCESS_NUM = 30
+PROCESS_NUM = 90
 
 os.system("rm -rf log.txt")
 def out_print(info:str):
