@@ -8,6 +8,7 @@ import html
 import urllib
 import json
 import os
+import threading
 
 ccf_json_path = 'CCF_rank_2019.json'
 ccf_rank = []
@@ -17,6 +18,10 @@ ccf_full_name_hash = []
 ccf_full_name = []
 ccf_publisher = []
 ccf_url = []
+paper_info = []
+thread_lock = threading.Lock()
+ccf_num = 0
+THREAD_NUM = 40
 
 def out_print(info:str):
     print('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S'), info))
@@ -343,7 +348,51 @@ def load_ccf():
                 ccf_publisher += [item['publisher']]
                 ccf_url += [item['url']]
 
+class crawlerTread(threading.Thread):
+    def __init__(self, threadID, search_list):
+        threading.Thread.__init__(self,name=str(threadID))
+        self.threadID = threadID
+        self.search_list = search_list
+        self.name = str(threadID)
+
+    def run(self):
+        #print ("Start process： " + str(self.threadID))
+        thread_handler(self.search_list, self.threadID)
+        #print ("End process： ：" + str(self.threadID))
+
+def thread_handler(search_list, threadID):
+    global paper_info
+    global thread_lock
+    global ccf_num
+    global THREAD_NUM
+
+    per_cpu_task_num = int(ccf_num / THREAD_NUM) + 1
+    for i in range(per_cpu_task_num):
+        try:
+            process_id = threadID + i * THREAD_NUM
+            instance_url = search_list[process_id]
+            out_print('(%03d/%03d) Deal with: %s' % (process_id + 1, ccf_num, instance_url))
+
+            if('dblp.uni-trier.de/db/conf' in instance_url):
+                thread_lock.acquire()
+                paper_info += conf_handler(instance_url, proxy)
+                thread_lock.release()
+            elif('dblp.uni-trier.de/db/journals' in instance_url):
+                thread_lock.acquire()
+                paper_info += journals_handler(instance_url, proxy)
+                thread_lock.release()
+            else:
+                out_print('Only support for dblp.uni-trier.de')
+        except Exception as e:
+            print("ERROR: ", e)
+            continue
+
+
 def main_handler(search_list, start=1, proxy={}):
+    global paper_info
+    global ccf_num
+    global THREAD_NUM
+
     '''
     Return matrix 
     [[year, title, doi_url, authors, ccf_rank, abbreviation, ccf_name, full_name, publisher], 
@@ -351,20 +400,17 @@ def main_handler(search_list, start=1, proxy={}):
     '''
     load_ccf()
 
-    length = len(search_list)
-    num = length - (start - 1)
-    paper_info = []
-    for i in range(num):
-        instance_url = search_list[(start - 1) + i]
-        out_print('(%03d/%03d) Deal with: %s' % (start + i, length, instance_url))
+    ccf_num = len(search_list)
+    thread_pool = []
 
-        if('dblp.uni-trier.de/db/conf' in instance_url):
-            paper_info += conf_handler(instance_url, proxy)
-        elif('dblp.uni-trier.de/db/journals' in instance_url):
-            paper_info += journals_handler(instance_url, proxy)
-        else:
-            out_print('Only support for dblp.uni-trier.de')
+    for i in range(THREAD_NUM):
+        per_thread_num = int(ccf_num/THREAD_NUM) + 1
+        thread = crawlerTread(i, search_list)
+        thread_pool.append(thread)
+        thread.start()
     
+    for t in thread_pool:
+        t.join()
     return paper_info
 
 def get_unique_ccf_url(path=ccf_json_path)->list:
