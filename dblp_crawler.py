@@ -19,9 +19,12 @@ ccf_full_name = []
 ccf_publisher = []
 ccf_url = []
 ccf_num = 0
-PROCESS_NUM = 20
+PROCESS_NUM = 2
 
+os.system("rm -rf log.txt")
 def out_print(info:str):
+    with open("log.txt", "a") as log:
+        log.write('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S\n'), info))
     print('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S'), info))
 
 def hash_full_name(name:str)->str:
