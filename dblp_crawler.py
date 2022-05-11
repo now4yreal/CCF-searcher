@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from readline import write_history_file
 from unittest import result
 import requests
 import re
@@ -8,7 +9,6 @@ import html
 import urllib
 import json
 import os
-from multiprocessing import Process, Pipe
 
 ccf_json_path = 'CCF_rank_2019.json'
 ccf_rank = []
@@ -18,13 +18,9 @@ ccf_full_name_hash = []
 ccf_full_name = []
 ccf_publisher = []
 ccf_url = []
-ccf_num = 0
-PROCESS_NUM = 30
+POINT = 0
 
-os.system("rm -rf log.txt")
 def out_print(info:str):
-    with open("log.txt", "a") as log:
-        log.write('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S\n'), info))
     print('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S'), info))
 
 def hash_full_name(name:str)->str:
@@ -348,40 +344,40 @@ def load_ccf():
                 ccf_full_name += [item['full-name']]
                 ccf_publisher += [item['publisher']]
                 ccf_url += [item['url']]
+def write_point_file(point):
+    with open("Point.log", "w") as f:
+        f.write(str(point))
 
+def read_point_file():
+    with open("Point.log", "r") as f:
+        content = int(f.read())
+    return content
 
-def process_handler(search_list, cpu_id, conn):
-    global ccf_num
-    global PROCESS_NUM
-    paper_info = []
+def write_result_file(result):
+    point = read_point_file()
+    if point == 1:
+        print("no result file, create one")
+        with open("dblp_crawler_output.json", "w") as f:
+            f.write(json.dumps(result))
+    else:
+        print("point state: {}".format(point))
+        paper_info = result
+        with open("dblp_crawler_output.json", "a") as f:
+            f.write(json.dumps(paper_info))
 
-    per_cpu_task_num = int(ccf_num / PROCESS_NUM) + 1
+def read_result_file()->list:
     
-    for i in range(per_cpu_task_num):
-        try:
-            process_id = cpu_id + i * PROCESS_NUM
-            instance_url = search_list[process_id]
-            out_print('(%03d/%03d) Deal with: %s' % (process_id + 1, ccf_num, instance_url))
-
-            if('dblp.uni-trier.de/db/conf' in instance_url):
-                paper_info += conf_handler(instance_url, proxy)
-            elif('dblp.uni-trier.de/db/journals' in instance_url):
-                paper_info += journals_handler(instance_url, proxy)
-            else:
-                out_print('Only support for dblp.uni-trier.de')
-        except Exception as e:
-            print("ERROR: ", e)
-            continue
-    
-    conn.send(str(paper_info))
-
+    with open("dblp_crawler_output.json", "r") as f:
+        content = json.loads(f.read())
+    '''
+    except Exception as e:
+        print(e)
+        print("File not found, return []")
+        content = []
+    '''
+    return content
 
 def main_handler(search_list, start=1, proxy={}):
-    global ccf_num
-    global PROCESS_NUM
-    process_pool = []
-    paper_info = []
-    conn1, conn2 = Pipe()
     '''
     Return matrix 
     [[year, title, doi_url, authors, ccf_rank, abbreviation, ccf_name, full_name, publisher], 
@@ -389,19 +385,25 @@ def main_handler(search_list, start=1, proxy={}):
     '''
     load_ccf()
 
-    ccf_num = len(search_list)
-    for i in range(PROCESS_NUM):
-        per_process_num = int(ccf_num/PROCESS_NUM) + 1
-        process = Process(target=process_handler, args=(search_list, i, conn2))
-        process_pool.append(process)
-        process.start()
+    length = len(search_list)
+    num = length - (start - 1)
+    for i in range(num):
+        instance_url = search_list[(start - 1) + i]
+        out_print('(%03d/%03d) Deal with: %s' % (start + i, length, instance_url))
+        try:
+            if('dblp.uni-trier.de/db/conf' in instance_url):
+                paper_info = conf_handler(instance_url, proxy)
+            elif('dblp.uni-trier.de/db/journals' in instance_url):
+                paper_info = journals_handler(instance_url, proxy)
+            else:
+                out_print('Only support for dblp.uni-trier.de')
+            write_result_file(paper_info)
+            write_point_file(start + i + 1)
+        except KeyboardInterrupt:
+            print("Current location: {}".format(start + i))
+            write_point_file(start + i)
+            exit(0)
 
-    for i in range(PROCESS_NUM):
-        per_content = conn1.recv()   
-        paper_info += list(per_content)
-    for p in process_pool:
-        p.join()
-    return paper_info
 
 def get_unique_ccf_url(path=ccf_json_path)->list:
     '''
@@ -434,12 +436,12 @@ if(__name__ == '__main__'):
     '''
     paper_lists = []
 
-    paper_lists += main_handler(get_unique_ccf_url(), 1, proxy)
+    current_location = read_point_file()
+   
+    main_handler(get_unique_ccf_url(), current_location, proxy)
 
     if(search_list):
-        paper_lists += main_handler(search_list, 1, proxy)
+        main_handler(searchn_list, 1, proxy)
 
-    out_print('Sum: ' + str(len(paper_lists)))
-    open('dblp_crawler_output.json', 'w').write(json.dumps(paper_lists))
     out_print("END")
     
