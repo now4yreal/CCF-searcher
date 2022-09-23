@@ -2,7 +2,7 @@
 import json
 import os
 temp_content = ''
-with open("/home/nudt/xlk/CCF-searcher/dblp_crawler_output_2022.json", "r") as f:
+with open("./CCF-searcher/dblp_crawler_output_2022.json", "r") as f:
     temp_content = f.read()
 
 point = 0
@@ -34,7 +34,7 @@ for i in range(len(temp_content)):
             except Exception as e:
                 print(e)
                 exit()
-                with open("/home/nudt/xlk/CCF-searcher/result/dblp_crawler_output_{}.json".format(i), "w") as f:
+                with open("./CCF-searcher/result/dblp_crawler_output_{}.json".format(i), "w") as f:
                     f.write(temp_content[pre_loc - 10: i + 10])    
                 pre_loc = i + 2
                 exit()
@@ -60,5 +60,5 @@ for i in search_list:
 print(loss)
 '''
 
-with open("/home/nudt/xlk/CCF-searcher/dblp_crawler_output_2022_final.json", "w") as f:
+with open("./CCF-searcher/dblp_crawler_output_2022_final.json", "w") as f:
     f.write(json.dumps(result))

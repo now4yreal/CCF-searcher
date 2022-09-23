@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 
-paper_lists = json.loads(open('/home/nudt/xlk/CCF-searcher/dblp_crawler_output_final.json', 'r').read())
+paper_lists = json.loads(open('./CCF-searcher/dblp_crawler_output_final.json', 'r').read())
 df = pd.DataFrame(paper_lists, columns=["year", "title", "doi", "authors", "ccf_rank", "abbreviation", "ccf_name", "full_name", "publisher"])\
     .sort_values(['ccf_rank', 'year'], ascending=[True, False])
 
@@ -49,7 +49,7 @@ for i in output_temp:
     if i not in result:
         result.append(i)
         output += i
-open('/home/nudt/xlk/CCF-searcher/result/sandbox_and_detect.md', 'w').write(output)
+open('./CCF-searcher/result/sandbox_and_detect.md', 'w').write(output)
 '''
 
 for i in range(len(target_df)):
@@ -62,4 +62,4 @@ for i in range(len(target_df)):
         target_df.iloc[i]['doi']
     )
 
-open('/home/nudt/xlk/CCF-searcher/result/static_analy_detect_AB.md', 'w').write(output)
+open('./CCF-searcher/result/static_analy_detect_AB.md', 'w').write(output)
