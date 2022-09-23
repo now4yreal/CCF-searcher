@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from readline import write_history_file
 from unittest import result
 import requests
 import re
@@ -17,6 +18,7 @@ ccf_full_name_hash = []
 ccf_full_name = []
 ccf_publisher = []
 ccf_url = []
+POINT = 0
 
 def out_print(info:str):
     print('%s: %s' %(time.strftime('%Y-%m-%d %H:%M:%S'), info))
@@ -284,9 +286,11 @@ def conf_handler(url, proxy={}):
         head = single_ul.find('href="')
         tail = single_ul.find('"', head + 6)
         tmp = single_ul[head + 6: tail]
-        if('dblp.uni-trier.de' in tmp):
+        if('dblp.uni-trier.de' in tmp and "2022" in tmp):
             detail_url_list += [tmp]
+            out_print('Manage conference sub item %s' % (tmp))
         else:
+            continue
             out_print('Unsupported conference sub item %s' % (tmp))
     
     paper_info = []
@@ -318,7 +322,8 @@ def journals_handler(url, proxy={}):
 
     paper_info = []
     for detail_url in detail_url_list:
-        paper_info += single_journals_handler(detail_url, proxy)
+        if "2022" in detail_url:
+            paper_info += single_journals_handler(detail_url, proxy)
     
     return paper_info
 
@@ -342,6 +347,43 @@ def load_ccf():
                 ccf_full_name += [item['full-name']]
                 ccf_publisher += [item['publisher']]
                 ccf_url += [item['url']]
+def write_point_file(point):
+    with open("Point.log", "w") as f:
+        f.write(str(point))
+
+def read_point_file():
+    with open("Point.log", "r") as f:
+        content = int(f.read())
+    return content
+
+def write_result_file(result):
+    '''
+    point = read_point_file()
+    if point == 1:
+        print("no result file, create one")
+        with open("dblp_crawler_output.json", "w") as f:
+            f.write(json.dumps(result))
+    else:
+        print("point state: {}".format(point))
+        paper_info = result
+        with open("dblp_crawler_output.json", "a") as f:
+            f.write(json.dumps(paper_info))
+    '''
+
+    with open("dblp_crawler_output_2022.json", "a") as f:
+        f.write(json.dumps(result))
+
+def read_result_file()->list:
+    
+    with open("dblp_crawler_output.json", "r") as f:
+        content = json.loads(f.read())
+    '''
+    except Exception as e:
+        print(e)
+        print("File not found, return []")
+        content = []
+    '''
+    return content
 
 def main_handler(search_list, start=1, proxy={}):
     '''
@@ -353,19 +395,25 @@ def main_handler(search_list, start=1, proxy={}):
 
     length = len(search_list)
     num = length - (start - 1)
-    paper_info = []
     for i in range(num):
         instance_url = search_list[(start - 1) + i]
         out_print('(%03d/%03d) Deal with: %s' % (start + i, length, instance_url))
+        try:
+            if('dblp.uni-trier.de/db/conf' in instance_url):
+                paper_info = conf_handler(instance_url, proxy)
+            elif('dblp.uni-trier.de/db/journals' in instance_url):
+                paper_info = journals_handler(instance_url, proxy)
+            else:
+                out_print('Only support for dblp.uni-trier.de')
+            if paper_info == []:
+                continue
+            write_result_file(paper_info)
+            write_point_file(start + i + 1)
+        except KeyboardInterrupt:
+            print("Current location: {}".format(start + i))
+            write_point_file(start + i)
+            exit(0)
 
-        if('dblp.uni-trier.de/db/conf' in instance_url):
-            paper_info += conf_handler(instance_url, proxy)
-        elif('dblp.uni-trier.de/db/journals' in instance_url):
-            paper_info += journals_handler(instance_url, proxy)
-        else:
-            out_print('Only support for dblp.uni-trier.de')
-    
-    return paper_info
 
 def get_unique_ccf_url(path=ccf_json_path)->list:
     '''
@@ -383,10 +431,9 @@ def get_unique_ccf_url(path=ccf_json_path)->list:
     return list(set(result))
 
 if(__name__ == '__main__'):
-    search_list = [
-        # 'http://dblp.uni-trier.de/db/conf/ppopp/',
-        # 'http://dblp.uni-trier.de/db/journals/tocs/',
-    ]
+    search_list = []
+    with open("result/loss.txt", "r") as f:
+        search_list = eval(f.read())
     proxy = {
         'http': '',
         'https': '',
@@ -398,12 +445,12 @@ if(__name__ == '__main__'):
     '''
     paper_lists = []
 
-    paper_lists += main_handler(get_unique_ccf_url(), 1, proxy)
+    current_location = read_point_file()
+   
+    main_handler(get_unique_ccf_url(), current_location, proxy)
 
-    if(search_list):
-        paper_lists += main_handler(search_list, 1, proxy)
+    #if(search_list):
+    #    main_handler(search_list, 1, proxy)
 
-    out_print('Sum: ' + str(len(paper_lists)))
-    open('dblp_crawler_output.json', 'w').write(json.dumps(paper_lists))
     out_print("END")
     

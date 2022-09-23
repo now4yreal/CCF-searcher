@@ -15,10 +15,17 @@ Crawling data from [dblp.com](https://dblp.uni-trier.de/), then processing these
 
 ### dblp_crawler.py
 
-It will take a long time to crawl the data.
+It will take a long time to crawl the data, and sometimes it will be killed because of the lack of physical memory, but don't worry, we implement "shut-and-continue" feature. 
 
 ```shell
+echo 1 > Point.log
 python3 dblp_crawler.py
+...
+...
+# if it get killed or stuck, press crtl+c
+python3 dblp_crawler.py # it will continue from the last process point
+python3 manage_output.py # it will process the crawled data(which can be moved to the crawler, but I donnot do that p:)
+python3 example.py # query the result
 ```
 
 ### ccf_searcher_example.ipynb
